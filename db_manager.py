@@ -3,6 +3,7 @@ from typing import Optional, Type
 
 import sqlalchemy
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Query
 from sqlalchemy_utils import database_exists, drop_database
 
 from db_tables import User, Participant, Event
@@ -76,6 +77,7 @@ class DBManager(metaclass=Singleton):
     def get_all_users(self) -> list[Type[User]]:
         return self.session.query(User).all()
 
+
     def add_participant(self, display_name: str, join_date: datetime.date) -> Optional[Participant]:
         try:
             new_participant = Participant(display_name=display_name, join_date=join_date)
@@ -90,9 +92,9 @@ class DBManager(metaclass=Singleton):
             self.reconnect()
             return None
 
-    def delete_participant_by_id(self, participant_id: int) -> bool:
+    def delete_participant_by_id(self, participant: Participant) -> bool:
         try:
-            self.session.query(Participant).filter_by(participant_id=participant_id).one().delete()
+            self.session.query(Participant).filter_by(participant=participant.participant_id).one().delete()
             return True
         # Important - since the id is the pk, no multiple results can be found therefore
         # sqlalchemy.orm.exc.MultipleResultsFound is impossible to trigger
@@ -138,6 +140,29 @@ class DBManager(metaclass=Singleton):
             self.logger.error(e)
             self.reconnect()
             return None
+
+    def delete_event(self, event: Event) -> bool:
+        try:
+            self.session.query(Event).filter_by(event_id=event.event_id).delete()
+            return True
+        except IntegrityError as ie:
+            self.logger.error(ie)
+            return False
+        except Exception as e:
+            self.logger.error(e)
+            self.reconnect()
+            return False
+
+    def get_all_events(self) -> list[Type[Event]]:
+        return self.session.query(Event).all()
+
+    def get_events_by_participant(self, participant: Participant) -> Query[Type[Event]]:
+        return self.session.query(Event).filter_by(participant_id=participant.participant_id)
+
+    def get_events_between_dates(self, starting: datetime.date, ending: datetime.date) -> Query[Type[Event]]:
+        return self.session.query(Event).filter(Event.date.between(starting, ending))
+
+
 
 
 
