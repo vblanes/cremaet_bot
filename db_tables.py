@@ -2,8 +2,17 @@ import sqlalchemy
 from sqlalchemy import ForeignKey, Column
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
+from sqlalchemy import Enum as SqlEnum
+
+from enum import Enum
 
 Base = declarative_base()
+
+
+class StatusEnum(Enum):
+    MAIN_MENU = 0
+    ADDING_PARTICIPANT = 1
+    ADDING_HOLIDAY = 2
 
 
 class User(Base):
@@ -13,6 +22,7 @@ class User(Base):
     last_name = Column(sqlalchemy.String(length=64))
     telegram_id = Column(sqlalchemy.BigInteger, unique=True)
     is_admin = Column(sqlalchemy.Boolean, default=False)
+    status = Column(SqlEnum(StatusEnum), default=StatusEnum.MAIN_MENU)
 
 
 class Participant(Base):
@@ -27,3 +37,5 @@ class Event(Base):
     event_id = Column(sqlalchemy.Integer, autoincrement=True, primary_key=True)
     participant = Column(sqlalchemy.Integer, ForeignKey(Participant.participant_id))
     date = join_date = Column(sqlalchemy.DateTime, server_default=func.now(), unique=True)
+    # Holidays and stuff
+    not_available = Column(sqlalchemy.Boolean, default=False)

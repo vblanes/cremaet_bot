@@ -1,12 +1,12 @@
 from datetime import datetime
-from typing import Optional, Type
+from typing import Optional, Type, List
 
 import sqlalchemy
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Query
 from sqlalchemy_utils import database_exists, drop_database
 
-from db_tables import User, Participant, Event
+from db_tables import User, Participant, Event, StatusEnum
 from utils import create_logger, create_database_session
 
 
@@ -77,6 +77,24 @@ class DBManager(metaclass=Singleton):
     def get_all_users(self) -> list[Type[User]]:
         return self.session.query(User).all()
 
+    def change_user_status(self, user: User, status: StatusEnum) -> bool:
+        try:
+            user.update({'status': status})
+            self.session.commit()
+            return True
+        except Exception as e:
+            self.logger.error(e)
+            self.reconnect()
+            return False
+
+    def promote_to_admin(self, user: User):
+        try:
+            user.is_admin = True
+            self.session.commit()
+        except Exception as e:
+            self.logger.error(e)
+            self.reconnect()
+            return False
 
     def add_participant(self, display_name: str, join_date: datetime.date) -> Optional[Participant]:
         try:
@@ -154,14 +172,16 @@ class DBManager(metaclass=Singleton):
             return False
 
     def get_all_events(self) -> list[Type[Event]]:
-        return self.session.query(Event).all()
+        return self.session.query(Event).order_by(Event.date.desc()).all()
 
-    def get_events_by_participant(self, participant: Participant) -> Query[Type[Event]]:
-        return self.session.query(Event).filter_by(participant_id=participant.participant_id)
+    def get_events_by_participant(self, participant: Participant) -> list[Type[Event]]:
+        return self.session.query(Event).filter_by(participant_id=participant.participant_id).all()
 
-    def get_events_between_dates(self, starting: datetime.date, ending: datetime.date) -> Query[Type[Event]]:
-        return self.session.query(Event).filter(Event.date.between(starting, ending))
+    def get_events_between_dates(self, starting: datetime.date, ending: datetime.date) -> list[Type[Event]]:
+        return self.session.query(Event).filter(Event.date.between(starting, ending)).all()
 
+    def get_last_n_events(self, limit_rows: int) -> list[Type[Event]]:
+        return self.session.query(Event).order_by(Event.date.desc()).limit(limit_rows).all()
 
 
 

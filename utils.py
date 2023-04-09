@@ -5,7 +5,7 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy_utils import database_exists, create_database
 from typing import Tuple
-
+import pandas as pd
 
 def create_logger(file_name: str) -> logging.Logger:
     log_path = os.path.join(os.path.dirname(file_name), "logs")
@@ -49,3 +49,12 @@ def create_database_session() -> Tuple[Session,  sqlalchemy.engine.Engine]:
     session = session_maker()
     session.commit()
     return session, engine
+
+
+def load_dialogs() -> dict:
+    dialogs = dict()
+    # An optimization - don't require pandas
+    df = pd.reac_csv('dialogs.csv', sep=';')
+    for row in df.itertuples():
+        dialogs[row.key] = row.value
+    return dialogs

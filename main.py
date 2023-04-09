@@ -1,13 +1,18 @@
 import json
 import requests
 from typing import Optional
-from utils import create_logger
+from utils import create_logger, load_dialogs
 import time
 from os import environ
 from db_manager import DBManager
+from db_tables import User, StatusEnum
+from urllib.parse import quote_plus
+from collections import deque
+from datetime import datetime, timedelta
 
 logger = create_logger(__file__)
 URL = f"https://api.telegram.org/bot{environ.get('CREAMET_TELEGRAM_TOKEN')}"
+dialogs = load_dialogs()
 
 
 def get_request(url: str) -> Optional[str]:
@@ -71,6 +76,91 @@ def filter_update(update_json: dict):
             return None, update_json['message']['message_id']
 
 
+def send_message(text2send: str, telegram_recipient: int, reply_markup=None):
+    text2send = quote_plus(text2send)
+    url = URL + f"sendMessage?text={text2send}&chat_id={telegram_recipient}&parse_mode=Markdown"
+    # reply_markup is for a special keyboard
+    if reply_markup:
+        url += "&reply_markup={}".format(reply_markup)
+    return json_from_get_request(url)
+
+
+def generate_main_keyboard(admin: bool):
+    if not admin:
+        keyboard = {'inline_keyboard': [
+            [{'text': 'Registro', 'callback_data': '/log'},
+             {'text': 'Ranking', 'callback_data': '/ranking'}],
+            [{'text': 'A qui li toca pagar??', 'callback_data': '/pay'}]
+        ]}
+    else:
+        keyboard = {'inline_keyboard': [
+            [{'text': 'Registro', 'callback_data': '/log'},
+             {'text': 'Ranking', 'callback_data': '/ranking'}],
+            [{'text': '¡Pagado!', 'callback_data': '/paid'},
+             {'text': 'Nuevo miembro', 'callback_data': '/member'}],
+            [{'text': 'A qui li toca pagar??', 'callback_data': '/whopays'}]
+        ]}
+    return keyboard
+
+
+def main_menu(user: User):
+    # Macro to send a Telegram user to the main menu
+    db = DBManager()
+    db.change_user_status(user, StatusEnum.MAIN_MENU)
+    # Generate the keyboard option
+    keyboard = generate_main_keyboard(user.is_admin)
+    send_message(dialogs['main_manu'], user.telegram_id, json.dumps(keyboard))
+
+
+def rotatory_algorithm() -> deque:
+    # Use a stack to determine the turn
+    # Apply the algorithm!
+    stack = deque()
+    # first, get all the participants. This dict is also a way to keep track
+    participants_dict = {p.participant_id: p.display_name for p in dbmanager.get_all_participants()}
+    # Pick all events
+    for event in dbmanager.get_all_events():
+        # All participants are already included
+        if not participants_dict:
+            break
+        # It is a holiday or whatever, skip this iteration
+        if event.not_available:
+            continue
+        participant_id = event.participant
+        if participant_id in participants_dict:
+            # Add the name to the stack
+            stack.appendleft(participants_dict.get(participant_id))
+            # Also, remove this from the dict
+            participants_dict.pop(participant_id)
+    # Now, check if there is some left in the dict
+    # They have no registries yet - Add in any order
+    if participants_dict:
+        for name in participants_dict.values():
+            stack.appendleft(name)
+    return stack
+
+
+def next_event_day() -> str:
+    # This is a specific function of the cremaet bot
+    # returns the date of the next friday as a str
+    db = DBManager()
+    last_event = db.get_last_n_events(1)[0]
+    return_date: datetime = last_event.date.copy()
+    if is_friday(return_date):
+        return_date += timedelta(days=7)
+    else:
+        return_date += timedelta(days=1)
+        while not is_friday(return_date):
+            return_date += timedelta(days=1)
+    return return_date.strftime('%d/%m/%Y')
+
+
+def is_friday(date: datetime):
+    # Checkme - changing the name of the func and the number
+    # This function could be used in other settings!
+    return date.weekday() != 4
+
+
 if __name__ == '__main__':
     # TODO - load the dialogs
     last_update_id = None
@@ -93,12 +183,66 @@ if __name__ == '__main__':
             if text == 'start' or '/start' in text:
                 # Register the user if they are not in the database
                 if active_user is None:
-                    # TODO - complete the fields
+                    # Checkme - is this the appropiate function?
+                    first_name = get_user_field_data('first_name')
+                    last_name = get_user_field_data('last_name')
                     active_user = dbmanager.add_user()
-                # TODO - send message anf main menu
-                pass
+                main_menu(active_user)
             elif text == environ.get('CREMAET_ADMIN_PASSWORD'):
-                # TODO - pick the user and change, change the isadmin attribute and save it
+                dbmanager.promote_to_admin(active_user)
+                send_message(dialogs.get('promoted_admin'), active_user.telegram_id)
+                main_menu(active_user)
+            elif text.startswith('/log'):
+                tokens = text.split(' ')
+                #checkme this could be parametrized with environ
+                n_registries = 5
+                # check for manual params
+                if len(tokens) > 1:
+                    if tokens[1].isnumeric():
+                        n_registries = int(tokens[1])
+                # sanity check - only positive values
+                if n_registries <= 0:
+                    n_registries = 5
+                last_events = dbmanager.get_last_n_events(n_registries)
+                # checkme - table type message
+                message = ''
+                for registry in last_events:
+                    participant_name = dbmanager.get_participant_by_id(registry.participant)
+                    if participant_name is None:
+                        # TODO - this can be parametrized!
+                        participant_name = 'Festa!'
+                    message += f'{registry.event_id} \t {participant_name} \t {registry.date} \n'
+                    send_message(message, active_user)
+                    main_menu(active_user)
+
+            elif text.startswith('/ranking'):
+                # Pick the different participants
+                participants = dbmanager.get_all_participants
+                ranking = dict()
+                for participant in participants:
+                    ranking[participant.display_name] = len(dbmanager.get_events_by_participant(participant))
+                # checkme - table type message
+                # prepare the message
+                message = ''
+                for k, v in sorted(ranking.items(), key=lambda item: item[1]):
+                    message += f'{k} \t {v} \n'
+
+            elif text.startswith('/whopays'):
+                ordered_turns = rotatory_algorithm()
+                next_date = next_event_day()
+                message = f'{ordered_turns[0]} - {next_date}'
+                send_message(message, active_user)
+                main_menu(active_user)
+
+            elif text.startswith('/event'):
+                pass
+
+            elif text.startswith('/member'):
+                # check the tokens, advance user may use params options
+                pass
+
+            # TODO - los deletes
+            else:
                 pass
 
 
