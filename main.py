@@ -220,10 +220,11 @@ def populate_database_from_file():
 
 
 if __name__ == '__main__':
+    logger.warning('Starting bot')
     # TODO - load the dialogs
     last_update_id = None
     dbmanager = DBManager()
-
+    logger.warning('Entering main loop')
     # Main loop
     while True:
         updates = get_updates(offset=last_update_id)

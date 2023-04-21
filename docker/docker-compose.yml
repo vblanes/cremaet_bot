@@ -5,7 +5,7 @@ services:
     image: mariadb:latest
     container_name: cremaetdb
     volumes:
-      - /home/bdslab/:/var/lib/mysql
+      - /home/bdslab/volumes/cremaet:/var/lib/mysql
     restart: always
     ports:
       - "4466:3306"
