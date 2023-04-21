@@ -1,0 +1,38 @@
+version: '3.1'
+
+services:
+  databasecremaet:
+    image: mariadb:latest
+    container_name: cremaetdb
+    volumes:
+      - /home/bdslab/:/var/lib/mysql
+    restart: always
+    ports:
+      - "4466:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=jajalol
+      - MYSQL_DATABASE=cremaet
+      - MYSQL_USER=bothandler
+      - MYSQL_PASS=jajalol
+    #networks:
+    #  - ntw
+
+  wakamolatest:
+    depends_on:
+      - databasecremaet
+    build:
+      context: ./cremaet_bot
+      dockerfile: Dockerfile
+    container_name: cremaetbot
+    environment:
+      - CREMAET_DATABASE=cremaet
+      - CREMAET_DEBUG=false
+      - CREMAET_TEST_DATABASE=cremaet_test
+      - CREMAET_DB_USER=root
+      - CREMAET_DB_PASSWORD=jajalol
+      - CREMAET_DB_HOST=localhost
+      - CREMAET_DB_PORT=3306
+      - CREMAET_API_ERROR_SLEEP=0.8
+      - CREMAET_NO_MESSAGE_TIME=0.8
+      - CREMAET_ADMIN_PASSWORD='jajalol'
+      - CREAMET_TELEGRAM_TOKEN=6075106615:AAGfCeyA9i4KM8L3JpRj_EN7G45Ghotk6yE
