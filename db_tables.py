@@ -13,6 +13,7 @@ class StatusEnum(Enum):
     MAIN_MENU = 0
     ADDING_PARTICIPANT = 1
     ADDING_HOLIDAY = 2
+    ADDING_EVENT = 3
 
 
 class User(Base):
@@ -36,6 +37,6 @@ class Event(Base):
     __tablename__ = 'Event'
     event_id = Column(sqlalchemy.Integer, autoincrement=True, primary_key=True)
     participant = Column(sqlalchemy.Integer, ForeignKey(Participant.participant_id))
-    date = join_date = Column(sqlalchemy.DateTime, server_default=func.now(), unique=True)
+    date = Column(sqlalchemy.DateTime, server_default=func.now(), unique=True)
     # Holidays and stuff
     not_available = Column(sqlalchemy.Boolean, default=False)

@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Query
 from sqlalchemy_utils import database_exists, drop_database
 
+from db_tables import Base
 from db_tables import User, Participant, Event, StatusEnum
 from utils import create_logger, create_database_session
 
@@ -21,11 +22,13 @@ class Singleton(type):
 
 class DBManager(metaclass=Singleton):
 
-    def __int__(self):
+    def __init__(self):
         session, engine = create_database_session()
         self.session = session
         self.engine = engine
         self.logger = create_logger(__file__)
+
+        Base.metadata.create_all(self.engine)
 
     def clean_tables(self) -> None:
         self.session.query(User).delete()
@@ -79,7 +82,7 @@ class DBManager(metaclass=Singleton):
 
     def change_user_status(self, user: User, status: StatusEnum) -> bool:
         try:
-            user.update({'status': status})
+            self.session.query(User).filter_by(user_id=user.user_id).update({'status': status})
             self.session.commit()
             return True
         except Exception as e:
@@ -142,7 +145,7 @@ class DBManager(metaclass=Singleton):
             self.reconnect()
             return None
 
-    def get_all_participants(self) -> list[Type[Participant]]:
+    def get_all_participants(self) -> list[Participant]:
         return self.session.query(Participant).all()
 
     def add_event(self, participant: Participant, date: datetime.date) -> Optional[Event]:
@@ -175,7 +178,7 @@ class DBManager(metaclass=Singleton):
         return self.session.query(Event).order_by(Event.date.desc()).all()
 
     def get_events_by_participant(self, participant: Participant) -> list[Type[Event]]:
-        return self.session.query(Event).filter_by(participant_id=participant.participant_id).all()
+        return self.session.query(Event).filter_by(participant=participant.participant_id).all()
 
     def get_events_between_dates(self, starting: datetime.date, ending: datetime.date) -> list[Type[Event]]:
         return self.session.query(Event).filter(Event.date.between(starting, ending)).all()

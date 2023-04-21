@@ -6,6 +6,8 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy_utils import database_exists, create_database
 from typing import Tuple
 import pandas as pd
+from datetime import datetime
+
 
 def create_logger(file_name: str) -> logging.Logger:
     log_path = os.path.join(os.path.dirname(file_name), "logs")
@@ -44,7 +46,7 @@ def create_database_session() -> Tuple[Session,  sqlalchemy.engine.Engine]:
     if not database_exists(engine.url):
         create_database(engine.url)
 
-    session_maker = sessionmaker()
+    session_maker = sessionmaker(expire_on_commit=False)
     session_maker.configure(bind=engine)
     session = session_maker()
     session.commit()
@@ -54,7 +56,12 @@ def create_database_session() -> Tuple[Session,  sqlalchemy.engine.Engine]:
 def load_dialogs() -> dict:
     dialogs = dict()
     # An optimization - don't require pandas
-    df = pd.reac_csv('dialogs.csv', sep=';')
+    df = pd.read_csv('dialogs.csv', sep=';')
     for row in df.itertuples():
         dialogs[row.key] = row.value
     return dialogs
+
+
+
+
+
