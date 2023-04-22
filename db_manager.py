@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Query
 from sqlalchemy_utils import database_exists, drop_database
 
-from db_tables import Base
+from db_tables import Base, Participant
 from db_tables import User, Participant, Event, StatusEnum
 from utils import create_logger, create_database_session
 
@@ -77,7 +77,7 @@ class DBManager(metaclass=Singleton):
             self.reconnect()
             return None
 
-    def get_all_users(self) -> list[Type[User]]:
+    def get_all_users(self):
         return self.session.query(User).all()
 
     def change_user_status(self, user: User, status: StatusEnum) -> bool:
@@ -145,19 +145,23 @@ class DBManager(metaclass=Singleton):
             self.reconnect()
             return None
 
-    def get_all_participants(self) -> list[Participant]:
+    def get_all_participants(self):
         return self.session.query(Participant).all()
 
-    def add_event(self, participant: Participant, date: datetime.date) -> Optional[Event]:
+    def add_event(self, participant: Optional[Participant], date: datetime.date, not_available: bool = False) -> Optional[Event]:
         try:
-            event = Event(participant=participant.participant_id, date=date)
+            participant_id = participant.participant_id if participant else None
+            event = Event(participant=participant_id, date=date, not_available=not_available)
             self.session.add(event)
             self.session.commit()
             return event
         except IntegrityError as ie:
             self.logger.error(ie)
+            self.session.rollback()
+            self.reconnect()
             return None
         except Exception as e:
+            self.session.rollback()
             self.logger.error(e)
             self.reconnect()
             return None
@@ -174,16 +178,16 @@ class DBManager(metaclass=Singleton):
             self.reconnect()
             return False
 
-    def get_all_events(self) -> list[Type[Event]]:
+    def get_all_events(self):
         return self.session.query(Event).order_by(Event.date.desc()).all()
 
-    def get_events_by_participant(self, participant: Participant) -> list[Type[Event]]:
+    def get_events_by_participant(self, participant: Participant):
         return self.session.query(Event).filter_by(participant=participant.participant_id).all()
 
-    def get_events_between_dates(self, starting: datetime.date, ending: datetime.date) -> list[Type[Event]]:
+    def get_events_between_dates(self, starting: datetime.date, ending: datetime.date):
         return self.session.query(Event).filter(Event.date.between(starting, ending)).all()
 
-    def get_last_n_events(self, limit_rows: int) -> list[Type[Event]]:
+    def get_last_n_events(self, limit_rows: int) :
         return self.session.query(Event).order_by(Event.date.desc()).limit(limit_rows).all()
 
 

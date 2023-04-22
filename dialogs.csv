@@ -6,3 +6,5 @@ participant_not_found;Ese cremaetero no existe o no está registrado :/
 date_bad_format;Formato de fecha incorrecto, prueba dd/mm/yyyy p.e., 28/03/1993 :)
 event_added_ok;¡Pago anotado con éxito!
 event_added_error;Algo salió mal añadiendo el pago :(
+holiday_added_error;Algo salió mal añadiendo el día libre :(
+holday_added_ok;Día libre añadido con éxito

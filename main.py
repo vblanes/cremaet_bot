@@ -1,6 +1,6 @@
 import json
 import requests
-from typing import Optional
+from typing import Optional, Union
 from utils import create_logger, load_dialogs
 import time
 from os import environ
@@ -56,7 +56,7 @@ def get_updates(offset: Optional[int] = None) -> dict:
     return json_from_get_request(url)
 
 
-def get_user_field_data(update_json: dict, field: str) -> str | int | None:
+def get_user_field_data(update_json: dict, field: str) -> Optional[Union[str, int]]:
     # A generic version of the filter method to obtain the chat id, but it allows to pick any field
     if 'edited_message' in update_json and 'text' in update_json['edited_message']:
         return update_json.get('edited_message').get('chat').get(field)
@@ -124,9 +124,10 @@ def generate_main_keyboard(admin: bool):
         keyboard = {'inline_keyboard': [
             [{'text': 'Registro', 'callback_data': '/log'},
              {'text': 'Ranking', 'callback_data': '/ranking'}],
-            [{'text': '¡Pagado!', 'callback_data': '/paid'},
+            [{'text': '¡Pagado!', 'callback_data': '/event'},
              {'text': 'Nuevo miembro', 'callback_data': '/member'}],
-            [{'text': 'A qui li toca pagar??', 'callback_data': '/whopays'}]
+            [{'text': 'A qui li toca pagar??', 'callback_data': '/whopays'},
+             {'text': 'Añadir dia libre', 'callback_data': '/holiday'}]
         ]}
     return keyboard
 
@@ -190,7 +191,7 @@ def is_friday(date: datetime):
     return date.weekday() == 4
 
 
-def not_command_response():
+def not_command_response(user: User):
     pass
 
 
@@ -270,7 +271,7 @@ if __name__ == '__main__':
                 for registry in last_events:
                     participant_name = dbmanager.get_participant_by_id(registry.participant)
                     if participant_name is None:
-                        participant_name = 'Festa!'
+                        participant_name = '**Festa!**'
                     else:
                         participant_name = participant_name.display_name
                     # TODO el formato es terrible
@@ -355,14 +356,31 @@ if __name__ == '__main__':
                     dbmanager.add_participant(participant_display_name, date_join)
                     # TODO - send okay message
                     main_menu(active_user)
-                # Manual way
+                # TODO - Manual way
+                else:
+                    pass
+            elif text.startswith('/holiday'):
+                tokens = text.split(' ')
+                # advanced mode
+                if len(tokens) == 2:
+                    try:
+                        date_holiday = datetime.strptime(tokens[1], '%d/%m/%Y')
+                    except ValueError:
+                        send_message(dialogs.get('date_bad_format'), active_user.telegram_id)
+                        continue
+                    event = dbmanager.add_event(None, date_holiday, True)
+                    message = dialogs.get('holiday_added_ok') if event else dialogs.get('holiday_added_error')
+                    ic(message)
+                    send_message(message, active_user.telegram_id)
+                    main_menu(active_user)
+                # TODO - Manual way
                 else:
                     pass
             # TODO - los deletes
             elif text == 'load_backup':
                 populate_database_from_file()
             else:
-                pass
+                not_command_response(active_user)
 
             last_update_id = get_last_update_id(updates) + 1
             time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))
