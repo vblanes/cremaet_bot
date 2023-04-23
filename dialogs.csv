@@ -8,3 +8,6 @@ event_added_ok;¡Pago anotado con éxito!
 event_added_error;Algo salió mal añadiendo el pago :(
 holiday_added_error;Algo salió mal añadiendo el día libre :(
 holday_added_ok;Día libre añadido con éxito
+no_log;No hay registro todavia :(
+log_holiday_display;**Festa!**
+no_ranking;Todavia no hay ranking :(

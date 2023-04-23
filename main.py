@@ -220,6 +220,101 @@ def populate_database_from_file():
         db.add_event(participant_object, payment_date)
 
 
+def display_log(user: User, tokens_command: list, n_registries: int = 5) -> None:
+    db = DBManager()
+    # check for manual params
+    if len(tokens_command) > 1:
+        if tokens_command[1].isnumeric():
+            n_registries = int(tokens_command[1])
+    # sanity check - only positive values
+    if n_registries <= 0:
+        n_registries = 5
+    last_events = db.get_last_n_events(n_registries)
+    # checkme - table type message
+    message_to_user = ''
+    for registry in last_events:
+        participant_name = db.get_participant_by_id(registry.participant)
+        if participant_name is None:
+            participant_name = dialogs.get('log_holiday_display')
+        else:
+            participant_name = participant_name.display_name
+        # TODO el formato es terrible
+        message_to_user += f'{registry.event_id} \t {participant_name} \t\t\t {registry.date.date()} \n'
+    if not message_to_user:
+        message_to_user = dialogs.get('no_log')
+    send_message(message_to_user, user.telegram_id)
+    main_menu(user)
+
+
+def display_ranking(user: User) -> None:
+    db = DBManager()
+    # Pick the different participants
+    participants = db.get_all_participants()
+    ranking = dict()
+    for participant_ in participants:
+        ranking[participant_.display_name] = len(db.get_events_by_participant(participant_))
+    # checkme - table type message
+    # prepare the message
+    message_to_user = ''
+    for k, v in sorted(ranking.items(), key=lambda item: item[1]):
+        message_to_user += f'{k} \t {v} \n'
+    # Sanity check
+    if not message_to_user:
+        message_to_user = dialogs.get('no_ranking')
+    send_message(message_to_user, user.telegram_id)
+    main_menu(user)
+
+
+def display_who_pays(user: User, n_events: int = 1) -> None:
+    turns = rotatory_algorithm()
+    next_date = next_event_day()
+    # sanity check to avoid injection of negative values
+    if n_events < 1:
+        n_events = 1
+
+    message_to_user = f'Li toca pagar a: {turns[0]} - {next_date}'
+    if n_events > 1:
+        message_to_user += '\n Después li tocaría a:\n'
+        n_iters = max(n_events, len(turns))
+        for it in range(1, n_iters):
+            message_to_user += f'{turns[it]}\n'
+
+    send_message(message_to_user, user.telegram_id)
+    main_menu(user)
+
+
+def add_event(user: User, tokens_command: list) -> None:
+    # TODO - Add the option to add an ammount at the end of the command
+    # Advanced use of the bot
+    if len(tokens_command) >= 3:
+        # second token is the participant
+        participant_str = tokens_command[1]
+        participant = dbmanager.get_participant_by_display_name(participant_str)
+        if participant is None:
+            send_message(dialogs.get('participant_not_found'), user.telegram_id)
+            return
+        # check the validity of the date
+        try:
+            date_event = datetime.strptime(tokens_command[2], '%d/%m/%Y')
+        except ValueError:
+            send_message(dialogs.get('date_bad_format'), user.telegram_id)
+            return
+        # TODO - maybe check if it's friday??
+        # If the method has not reached any continue here, we have a correct date and participant
+        res = dbmanager.add_event(participant, date_event)
+        message = dialogs.get('event_added_ok') if res else dialogs.get('event_added_error')
+        send_message(message, user.telegram_id)
+        main_menu(user)
+
+    # Bot guided use
+    else:
+        dbmanager.change_user_status(user, StatusEnum.ADDING_EVENT)
+        # calculate the next friday and just ask for the participant name
+        next_day = next_event_day()
+        message = dialogs.get('add_event').replace('%$%', next_day)
+        send_message(message, user.telegram_id)
+
+
 if __name__ == '__main__':
     logger.warning('Starting bot')
     # TODO - load the dialogs
@@ -237,106 +332,41 @@ if __name__ == '__main__':
             text, msg_id = filter_update(update)
             text = text.lower()
             telegram_id = get_user_field_data(update, "id")
-            active_user = dbmanager.get_user_by_telegram_id(telegram_id)
+            user = dbmanager.get_user_by_telegram_id(telegram_id)
 
             # casos de uso
             ic(text)
             if text == 'start' or '/start' in text:
                 # Register the user if they are not in the database
-                if active_user is None:
+                if user is None:
                     # Checkme - is this the appropiate function?
                     first_name = get_user_field_data(update, 'first_name')
                     last_name = get_user_field_data(update, 'last_name')
-                    active_user = dbmanager.add_user(telegram_id, first_name, last_name)
+                    user = dbmanager.add_user(telegram_id, first_name, last_name)
 
-                main_menu(active_user)
+                main_menu(user)
             elif text == environ.get('CREMAET_ADMIN_PASSWORD'):
-                dbmanager.promote_to_admin(active_user)
-                send_message(dialogs.get('promoted_admin'), active_user.telegram_id)
-                main_menu(active_user)
+                dbmanager.promote_to_admin(user)
+                send_message(dialogs.get('promoted_admin'), user.telegram_id)
+                main_menu(user)
             elif text.startswith('/log'):
                 tokens = text.split(' ')
-                # checkme this could be parametrized with environ
-                n_registries = 5
-                # check for manual params
-                if len(tokens) > 1:
-                    if tokens[1].isnumeric():
-                        n_registries = int(tokens[1])
-                # sanity check - only positive values
-                if n_registries <= 0:
-                    n_registries = 5
-                last_events = dbmanager.get_last_n_events(n_registries)
-                # checkme - table type message
-                message = ''
-                for registry in last_events:
-                    participant_name = dbmanager.get_participant_by_id(registry.participant)
-                    if participant_name is None:
-                        participant_name = '**Festa!**'
-                    else:
-                        participant_name = participant_name.display_name
-                    # TODO el formato es terrible
-                    message += f'{registry.event_id} \t {participant_name} \t\t\t {registry.date.date()} \n'
-                if not message:
-                    message = 'No hay registro todavia :('
-                send_message(message, active_user.telegram_id)
-                main_menu(active_user)
+                display_log(user=user, tokens_command=tokens)
 
             elif text.startswith('/ranking'):
-                # Pick the different participants
-                participants = dbmanager.get_all_participants()
-                ranking = dict()
-                for participant in participants:
-                    ranking[participant.display_name] = len(dbmanager.get_events_by_participant(participant))
-                # checkme - table type message
-                # prepare the message
-                message = ''
-                for k, v in sorted(ranking.items(), key=lambda item: item[1]):
-                    message += f'{k} \t {v} \n'
-                # Sanity check
-                if not message:
-                    message = 'Todavia no hay ranking :('
-                send_message(message, active_user.telegram_id)
-                main_menu(active_user)
+                display_ranking(user=user)
 
             elif text.startswith('/whopays'):
-                ic('Intro')
-                ordered_turns = rotatory_algorithm()
-                ic(ordered_turns)
-                next_date = next_event_day()
-                message = f'Li toca pagar a: {ordered_turns[0]} - {next_date}'
-                send_message(message, active_user.telegram_id)
-                main_menu(active_user)
+                tokens = text.split(' ')
+                argument = 1
+                if len(tokens) > 1 and tokens[1].isnumeric():
+                    argument = int(tokens[1])
+                display_who_pays(user=user, n_events=argument)
 
             elif text.startswith('/event'):
                 tokens = text.split(' ')
-                # Advanced use of the bot
-                if len(tokens) >= 3:
-                    # second token is the participant
-                    participant_str = tokens[1]
-                    participant = dbmanager.get_participant_by_display_name(participant_str)
-                    if participant is None:
-                        send_message(dialogs.get('participant_not_found'), active_user.telegram_id)
-                        continue
-                    # check the validity of the date
-                    try:
-                        date_event = datetime.strptime(tokens[2], '%d/%m/%Y')
-                    except ValueError:
-                        send_message(dialogs.get('date_bad_format'), active_user.telegram_id)
-                        continue
-                    # TODO - maybe check if it's friday??
-                    # If the method has not reached any continue here, we have a correct date and participant
-                    res = dbmanager.add_event(participant, date_event)
-                    message = dialogs.get('event_added_ok') if res else dialogs.get('event_added_error')
-                    send_message(message, active_user.telegram_id)
-                    main_menu(active_user)
-
-                # Bot guided use
-                else:
-                    dbmanager.change_user_status(active_user, StatusEnum.ADDING_EVENT)
-                    # calculate the next friday and just ask for the participant name
-                    next_day = next_event_day()
-                    message = dialogs.get('add_event').replace('%$%', next_day)
-                    send_message(message, active_user.telegram_id)
+                # TODO
+                pass
 
             elif text.startswith('/participant'):
                 # create one participant
@@ -350,12 +380,12 @@ if __name__ == '__main__':
                         try:
                             date_join = datetime.strptime(tokens[2], '%d/%m/%Y')
                         except ValueError:
-                            send_message(dialogs.get('date_bad_format'), active_user.telegram_id)
+                            send_message(dialogs.get('date_bad_format'), user.telegram_id)
                             continue
                     # create the participant
                     dbmanager.add_participant(participant_display_name, date_join)
                     # TODO - send okay message
-                    main_menu(active_user)
+                    main_menu(user)
                 # TODO - Manual way
                 else:
                     pass
@@ -366,13 +396,13 @@ if __name__ == '__main__':
                     try:
                         date_holiday = datetime.strptime(tokens[1], '%d/%m/%Y')
                     except ValueError:
-                        send_message(dialogs.get('date_bad_format'), active_user.telegram_id)
+                        send_message(dialogs.get('date_bad_format'), user.telegram_id)
                         continue
                     event = dbmanager.add_event(None, date_holiday, True)
                     message = dialogs.get('holiday_added_ok') if event else dialogs.get('holiday_added_error')
                     ic(message)
-                    send_message(message, active_user.telegram_id)
-                    main_menu(active_user)
+                    send_message(message, user.telegram_id)
+                    main_menu(user)
                 # TODO - Manual way
                 else:
                     pass
@@ -380,7 +410,7 @@ if __name__ == '__main__':
             elif text == 'load_backup':
                 populate_database_from_file()
             else:
-                not_command_response(active_user)
+                not_command_response(user)
 
             last_update_id = get_last_update_id(updates) + 1
             time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))
