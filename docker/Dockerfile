@@ -5,8 +5,8 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update -y
 RUN python -m pip install --upgrade pip
 
-COPY /wakamola_telegram_front /wakamola_telegram_front
-WORKDIR /wakamola_telegram_front
+COPY /cremaet_bot /cremaet_bot
+WORKDIR /cremaet_bot
 RUN chmod +x entrypoint.sh
 
 RUN pip install -r requirements.txt

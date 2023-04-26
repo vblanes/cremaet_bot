@@ -365,8 +365,7 @@ if __name__ == '__main__':
 
             elif text.startswith('/event'):
                 tokens = text.split(' ')
-                # TODO
-                pass
+                add_event(user=user, tokens_command=tokens)
 
             elif text.startswith('/participant'):
                 # create one participant
