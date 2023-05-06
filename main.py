@@ -323,94 +323,99 @@ if __name__ == '__main__':
     logger.warning('Entering main loop')
     # Main loop
     while True:
-        updates = get_updates(offset=last_update_id)
-        if 'result' not in updates or len(updates['result']) == 0:
-            time.sleep(float(environ.get('CREMAET_NO_MESSAGE_TIME', 0.8)))
-            continue
+        try:
+            updates = get_updates(offset=last_update_id)
+            if 'result' not in updates or len(updates['result']) == 0:
+                time.sleep(float(environ.get('CREMAET_NO_MESSAGE_TIME', 0.8)))
+                continue
 
-        for update in updates['result']:
-            text, msg_id = filter_update(update)
-            text = text.lower()
-            telegram_id = get_user_field_data(update, "id")
-            user = dbmanager.get_user_by_telegram_id(telegram_id)
+            for update in updates['result']:
+                text, msg_id = filter_update(update)
+                text = text.lower()
+                telegram_id = get_user_field_data(update, "id")
+                user = dbmanager.get_user_by_telegram_id(telegram_id)
 
-            # casos de uso
-            ic(text)
-            if text == 'start' or '/start' in text:
-                # Register the user if they are not in the database
-                if user is None:
-                    # Checkme - is this the appropiate function?
-                    first_name = get_user_field_data(update, 'first_name')
-                    last_name = get_user_field_data(update, 'last_name')
-                    user = dbmanager.add_user(telegram_id, first_name, last_name)
+                # casos de uso
+                ic(text)
+                if text == 'start' or '/start' in text:
+                    # Register the user if they are not in the database
+                    if user is None:
+                        # Checkme - is this the appropiate function?
+                        first_name = get_user_field_data(update, 'first_name')
+                        last_name = get_user_field_data(update, 'last_name')
+                        user = dbmanager.add_user(telegram_id, first_name, last_name)
 
-                main_menu(user)
-            elif text == environ.get('CREMAET_ADMIN_PASSWORD'):
-                dbmanager.promote_to_admin(user)
-                send_message(dialogs.get('promoted_admin'), user.telegram_id)
-                main_menu(user)
-            elif text.startswith('/log'):
-                tokens = text.split(' ')
-                display_log(user=user, tokens_command=tokens)
+                    main_menu(user)
+                elif text == environ.get('CREMAET_ADMIN_PASSWORD'):
+                    dbmanager.promote_to_admin(user)
+                    send_message(dialogs.get('promoted_admin'), user.telegram_id)
+                    main_menu(user)
+                elif text.startswith('/log'):
+                    tokens = text.split(' ')
+                    display_log(user=user, tokens_command=tokens)
 
-            elif text.startswith('/ranking'):
-                display_ranking(user=user)
+                elif text.startswith('/ranking'):
+                    display_ranking(user=user)
 
-            elif text.startswith('/whopays'):
-                tokens = text.split(' ')
-                argument = 1
-                if len(tokens) > 1 and tokens[1].isnumeric():
-                    argument = int(tokens[1])
-                display_who_pays(user=user, n_events=argument)
+                elif text.startswith('/whopays'):
+                    tokens = text.split(' ')
+                    argument = 1
+                    if len(tokens) > 1 and tokens[1].isnumeric():
+                        argument = int(tokens[1])
+                    display_who_pays(user=user, n_events=argument)
 
-            elif text.startswith('/event'):
-                tokens = text.split(' ')
-                # TODO
-                pass
+                elif text.startswith('/event'):
+                    tokens = text.split(' ')
+                    # TODO
+                    pass
 
-            elif text.startswith('/participant'):
-                # create one participant
-                tokens = text.split(' ')
-                # Advanced participant creation
-                if len(tokens) >= 2:
-                    participant_display_name = tokens[1].strip()
-                    date_join = datetime.today()
-                    # In case the date is provided
-                    if len(tokens) == 3:
+                elif text.startswith('/participant'):
+                    # create one participant
+                    tokens = text.split(' ')
+                    # Advanced participant creation
+                    if len(tokens) >= 2:
+                        participant_display_name = tokens[1].strip()
+                        date_join = datetime.today()
+                        # In case the date is provided
+                        if len(tokens) == 3:
+                            try:
+                                date_join = datetime.strptime(tokens[2], '%d/%m/%Y')
+                            except ValueError:
+                                send_message(dialogs.get('date_bad_format'), user.telegram_id)
+                                continue
+                        # create the participant
+                        dbmanager.add_participant(participant_display_name, date_join)
+                        # TODO - send okay message
+                        main_menu(user)
+                    # TODO - Manual way
+                    else:
+                        pass
+                elif text.startswith('/holiday'):
+                    tokens = text.split(' ')
+                    # advanced mode
+                    if len(tokens) == 2:
                         try:
-                            date_join = datetime.strptime(tokens[2], '%d/%m/%Y')
+                            date_holiday = datetime.strptime(tokens[1], '%d/%m/%Y')
                         except ValueError:
                             send_message(dialogs.get('date_bad_format'), user.telegram_id)
                             continue
-                    # create the participant
-                    dbmanager.add_participant(participant_display_name, date_join)
-                    # TODO - send okay message
-                    main_menu(user)
-                # TODO - Manual way
+                        event = dbmanager.add_event(None, date_holiday, True)
+                        message = dialogs.get('holiday_added_ok') if event else dialogs.get('holiday_added_error')
+                        ic(message)
+                        send_message(message, user.telegram_id)
+                        main_menu(user)
+                    # TODO - Manual way
+                    else:
+                        pass
+                # TODO - los deletes
+                elif text == 'load_backup':
+                    populate_database_from_file()
                 else:
-                    pass
-            elif text.startswith('/holiday'):
-                tokens = text.split(' ')
-                # advanced mode
-                if len(tokens) == 2:
-                    try:
-                        date_holiday = datetime.strptime(tokens[1], '%d/%m/%Y')
-                    except ValueError:
-                        send_message(dialogs.get('date_bad_format'), user.telegram_id)
-                        continue
-                    event = dbmanager.add_event(None, date_holiday, True)
-                    message = dialogs.get('holiday_added_ok') if event else dialogs.get('holiday_added_error')
-                    ic(message)
-                    send_message(message, user.telegram_id)
-                    main_menu(user)
-                # TODO - Manual way
-                else:
-                    pass
-            # TODO - los deletes
-            elif text == 'load_backup':
-                populate_database_from_file()
-            else:
-                not_command_response(user)
+                    not_command_response(user)
 
-            last_update_id = get_last_update_id(updates) + 1
-            time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))
+                last_update_id = get_last_update_id(updates) + 1
+        except Exception as e:
+            logger.error(e)
+            time.sleep(float(environ.get('CREMAET_API_ERROR_SLEEP', 0.8)))
+            continue
+        time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))

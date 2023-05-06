@@ -61,6 +61,7 @@ class DBManager(metaclass=Singleton):
             self.session.commit()
             return new_user
         except IntegrityError as ie:
+            self.reconnect()
             self.logger.error(ie)
             return None
         except Exception as e:
