@@ -3,7 +3,7 @@ main_menu;¡Bienvenido al CremaetBot! Selecciona una de las opciones
 promoted_admin;Contraseña correcta, promocionado a Admin!
 add_event;¿Quién pagó el %$%?
 participant_not_found;Ese cremaetero no existe o no está registrado :/
-date_bad_format;Formato de fecha incorrecto, prueba dd/mm/yyyy p.e., 28/03/1993 :)
+date_bad_format;Formato de fecha incorrecto, prueba dd/mm/aaaa p.e., 28/03/1993 :)
 event_added_ok;¡Pago anotado con éxito!
 event_added_error;Algo salió mal añadiendo el pago :(
 holiday_added_error;Algo salió mal añadiendo el día libre :(
@@ -11,3 +11,4 @@ holday_added_ok;Día libre añadido con éxito
 no_log;No hay registro todavia :(
 log_holiday_display;**Festa!**
 no_ranking;Todavia no hay ranking :(
+add_holiday;Indica la fecha del próximo viernes festivo con formato dd/mm/aaaa

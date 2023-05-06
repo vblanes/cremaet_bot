@@ -302,8 +302,8 @@ def add_event(user: User, tokens_command: list) -> None:
         # TODO - maybe check if it's friday??
         # If the method has not reached any continue here, we have a correct date and participant
         res = dbmanager.add_event(participant, date_event)
-        message = dialogs.get('event_added_ok') if res else dialogs.get('event_added_error')
-        send_message(message, user.telegram_id)
+        message_to_user = dialogs.get('event_added_ok') if res else dialogs.get('event_added_error')
+        send_message(message_to_user, user.telegram_id)
         main_menu(user)
 
     # Bot guided use
@@ -311,8 +311,26 @@ def add_event(user: User, tokens_command: list) -> None:
         dbmanager.change_user_status(user, StatusEnum.ADDING_EVENT)
         # calculate the next friday and just ask for the participant name
         next_day = next_event_day()
-        message = dialogs.get('add_event').replace('%$%', next_day)
+        message_to_user = dialogs.get('add_event').replace('%$%', next_day)
+        send_message(message_to_user, user.telegram_id)
+
+
+def add_holidays(user: User, tokens_command: list):
+    # advanced mode
+    if len(tokens_command) == 2:
+        try:
+            date_holiday = datetime.strptime(tokens_command[1], '%d/%m/%Y')
+        except ValueError:
+            send_message(dialogs.get('date_bad_format'), user.telegram_id)
+            return
+        event = dbmanager.add_event(None, date_holiday, True)
+        message = dialogs.get('holiday_added_ok') if event else dialogs.get('holiday_added_error')
+        ic(message)
         send_message(message, user.telegram_id)
+        main_menu(user)
+    else:
+        send_message(dialogs.get('add_holiday'), user.telegram_id)
+        return
 
 
 if __name__ == '__main__':
@@ -333,41 +351,40 @@ if __name__ == '__main__':
                 text, msg_id = filter_update(update)
                 text = text.lower()
                 telegram_id = get_user_field_data(update, "id")
-                user = dbmanager.get_user_by_telegram_id(telegram_id)
+                active_user = dbmanager.get_user_by_telegram_id(telegram_id)
 
                 # casos de uso
                 ic(text)
                 if text == 'start' or '/start' in text:
                     # Register the user if they are not in the database
-                    if user is None:
+                    if active_user is None:
                         # Checkme - is this the appropiate function?
                         first_name = get_user_field_data(update, 'first_name')
                         last_name = get_user_field_data(update, 'last_name')
-                        user = dbmanager.add_user(telegram_id, first_name, last_name)
+                        active_user = dbmanager.add_user(telegram_id, first_name, last_name)
 
-                    main_menu(user)
+                    main_menu(active_user)
                 elif text == environ.get('CREMAET_ADMIN_PASSWORD'):
-                    dbmanager.promote_to_admin(user)
-                    send_message(dialogs.get('promoted_admin'), user.telegram_id)
-                    main_menu(user)
+                    dbmanager.promote_to_admin(active_user)
+                    send_message(dialogs.get('promoted_admin'), active_user.telegram_id)
+                    main_menu(active_user)
                 elif text.startswith('/log'):
                     tokens = text.split(' ')
-                    display_log(user=user, tokens_command=tokens)
+                    display_log(user=active_user, tokens_command=tokens)
 
                 elif text.startswith('/ranking'):
-                    display_ranking(user=user)
+                    display_ranking(user=active_user)
 
                 elif text.startswith('/whopays'):
                     tokens = text.split(' ')
                     argument = 1
                     if len(tokens) > 1 and tokens[1].isnumeric():
                         argument = int(tokens[1])
-                    display_who_pays(user=user, n_events=argument)
+                    display_who_pays(user=active_user, n_events=argument)
 
                 elif text.startswith('/event'):
                     tokens = text.split(' ')
-                    # TODO
-                    pass
+                    add_event(user=active_user, tokens_command=tokens)
 
                 elif text.startswith('/participant'):
                     # create one participant
@@ -381,41 +398,29 @@ if __name__ == '__main__':
                             try:
                                 date_join = datetime.strptime(tokens[2], '%d/%m/%Y')
                             except ValueError:
-                                send_message(dialogs.get('date_bad_format'), user.telegram_id)
+                                send_message(dialogs.get('date_bad_format'), active_user.telegram_id)
                                 continue
                         # create the participant
                         dbmanager.add_participant(participant_display_name, date_join)
                         # TODO - send okay message
-                        main_menu(user)
+                        main_menu(active_user)
                     # TODO - Manual way
                     else:
                         pass
                 elif text.startswith('/holiday'):
                     tokens = text.split(' ')
-                    # advanced mode
-                    if len(tokens) == 2:
-                        try:
-                            date_holiday = datetime.strptime(tokens[1], '%d/%m/%Y')
-                        except ValueError:
-                            send_message(dialogs.get('date_bad_format'), user.telegram_id)
-                            continue
-                        event = dbmanager.add_event(None, date_holiday, True)
-                        message = dialogs.get('holiday_added_ok') if event else dialogs.get('holiday_added_error')
-                        ic(message)
-                        send_message(message, user.telegram_id)
-                        main_menu(user)
-                    # TODO - Manual way
-                    else:
-                        pass
+
+
                 # TODO - los deletes
+
                 elif text == 'load_backup':
                     populate_database_from_file()
                 else:
-                    not_command_response(user)
+                    not_command_response(active_user)
 
                 last_update_id = get_last_update_id(updates) + 1
+                time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))
         except Exception as e:
             logger.error(e)
             time.sleep(float(environ.get('CREMAET_API_ERROR_SLEEP', 0.8)))
             continue
-        time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))
