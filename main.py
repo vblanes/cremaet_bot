@@ -118,7 +118,8 @@ def generate_main_keyboard(admin: bool):
         keyboard = {'inline_keyboard': [
             [{'text': 'Registro', 'callback_data': '/log'},
              {'text': 'Ranking', 'callback_data': '/ranking'}],
-            [{'text': 'A qui li toca pagar??', 'callback_data': '/whopays'}]
+            [{'text': 'A qui li toca pagar??', 'callback_data': '/whopays'},
+             {'text': 'Sa rallao el bot', 'callback_data': '/start'}]
         ]}
     else:
         keyboard = {'inline_keyboard': [
@@ -343,6 +344,8 @@ if __name__ == '__main__':
     while True:
         try:
             updates = get_updates(offset=last_update_id)
+            # Ignore messages that causes error
+            last_update_id = get_last_update_id(updates) + 1
             if 'result' not in updates or len(updates['result']) == 0:
                 time.sleep(float(environ.get('CREMAET_NO_MESSAGE_TIME', 0.8)))
                 continue
@@ -418,7 +421,6 @@ if __name__ == '__main__':
                 else:
                     not_command_response(active_user)
 
-                last_update_id = get_last_update_id(updates) + 1
                 time.sleep(float(environ.get('CONSULTING_TIME', 0.4)))
         except Exception as e:
             logger.error(e)
