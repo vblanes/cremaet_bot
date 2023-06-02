@@ -344,11 +344,11 @@ if __name__ == '__main__':
     while True:
         try:
             updates = get_updates(offset=last_update_id)
-            # Ignore messages that causes error
-            last_update_id = get_last_update_id(updates) + 1
             if 'result' not in updates or len(updates['result']) == 0:
                 time.sleep(float(environ.get('CREMAET_NO_MESSAGE_TIME', 0.8)))
                 continue
+            # Ignores the messages that causes errors
+            last_update_id = get_last_update_id(updates) + 1
 
             for update in updates['result']:
                 text, msg_id = filter_update(update)
